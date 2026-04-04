@@ -1,77 +1,109 @@
-# FinVault (Stage 0-2 Complete)
+# FinVault (Stage 0-3 Complete)
 
-FinVault is a local-first, staged Python project for experimenting with ingestion and retrieval workflows over financial documents.
+FinVault is a local-first, staged Python project for experimenting with document ingestion and retrieval workflows over financial documents.
 
 Current implementation status:
 
-- Stage 0: uv project setup and smoke scaffolding
-- Stage 1: mocked FastAPI backend API contract
-- Stage 2: Streamlit frontend skeleton wired to mocked backend
+- Stage 0: uv-native setup and smoke scaffolding
+- Stage 1: mocked FastAPI backend contract
+- Stage 2: Streamlit frontend connected to backend
+- Stage 3: real local ingestion pipeline with debug artifacts
 
-## Stage 2 Scope
+## Stage 3 Completion Notes (2026-04-04)
 
-Stage 2 adds a debug-friendly Streamlit app that exercises the existing mocked backend contract end-to-end.
+Validated in local testing:
 
-Implemented in Stage 2:
+- Streamlit health check works against local FastAPI backend
+- path-based ingestion works with valid PDF paths
+- upload-based ingestion works from any local file location via `Upload selected PDF and ingest`
+- status polling reflects realistic stage transitions through completion
+- chat flow remains functional with existing mocked chat contract
+- ingestion artifacts are generated under `data/ingestion/<job_id>/`
 
-- app header and clear UI sections
-- backend health check UI (`GET /health`)
-- ingest submit UI (`POST /ingest`)
-- ingest status check UI (`GET /ingest/{job_id}/status`)
-- chat UI (`POST /chat`)
-- answer and citations rendering
-- debug panel with raw request/response payloads
-- small frontend service layer (`frontend/services/api_client.py`)
-- environment-based backend URL config (`frontend/config.py`)
+## Stage 3 Scope
 
-Still intentionally mocked in Stage 2:
+Stage 3 replaces mocked ingestion with a real local pipeline for PDF input.
 
-- no real file parsing/Docling
-- no Qdrant integration
-- no Ollama integration
-- no LangGraph orchestration
-- no SSE streaming
-- no background workers or database layer
+Implemented in Stage 3:
 
-## Project Layout
+- real ingestion jobs created by `POST /ingest`
+- realistic stage progress via `GET /ingest/{job_id}/status`
+- local file validation and clear error messages
+- parser adapter boundary (Docling-ready) with `pypdf` runtime parser
+- deterministic normalization and chunking
+- artifact output under `data/ingestion/<job_id>/`
+- traceable chunk metadata for future citations
+
+Still intentionally not implemented:
+
+- Qdrant/vector storage integration
+- embeddings and retrieval pipeline
+- Ollama integration
+- LangGraph orchestration
+- SSE streaming
+- reranking/hybrid retrieval
+- background queue infrastructure
+
+## Backend Ingestion Contract
+
+Existing endpoints remain stable:
+
+- `POST /ingest`
+- `POST /ingest/upload`
+- `GET /ingest/{job_id}/status`
+
+Status values are now more realistic:
+
+- `queued`
+- `validating`
+- `parsing`
+- `normalizing`
+- `chunking`
+- `completed`
+- `failed`
+
+`POST /ingest` request format (unchanged):
+
+```json
+{
+  "source_type": "pdf",
+  "source_value": "C:/Users/you/path/to/file.pdf",
+  "metadata": {
+    "ticker": "MSFT"
+  }
+}
+```
+
+`GET /ingest/{job_id}/status` now also returns optional debug fields:
+
+- `artifacts`
+- `summary`
+- `error`
+
+These are additive fields and remain compatible with the Stage 2 frontend.
+
+## Project Layout (Stage 3 highlights)
 
 ```text
-finvault/
-  backend/
-    main.py
-    api/
-    core/
-    schemas/
-    services/
-  frontend/
-    app.py
-    config.py
-    components/
-      sections.py
-    services/
-      api_client.py
-  data/
-  scripts/
-  tests/
-  .env.example
-  pyproject.toml
-  README.md
+backend/
+  api/routes/ingest.py
+  ingestion/
+    validator.py
+    parsers/
+      base.py
+      pypdf_parser.py
+      docling_parser.py
+    normalizer.py
+    chunker.py
+    artifacts.py
+    job_store.py
+  services/
+    ingestion_service.py
+data/
+  ingestion/
+frontend/
+  app.py
 ```
-
-## Environment
-
-Copy `.env.example` to `.env` and keep local values:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Important variables for Stage 2:
-
-- `BACKEND_HOST=127.0.0.1`
-- `BACKEND_PORT=8000`
-- `FRONTEND_HOST=127.0.0.1`
-- `FRONTEND_PORT=8501`
 
 ## Run with uv
 
@@ -94,70 +126,69 @@ Run frontend (Terminal 2):
 uv run streamlit run frontend/app.py --server.address 127.0.0.1 --server.port 8501
 ```
 
-## How to Test Stage 2 UI
+## Real Ingestion Flow (Stage 3)
 
-Open frontend:
+1. Submit ingestion request from Streamlit or `/docs`
+2. Receive `job_id`
+3. Poll `GET /ingest/{job_id}/status`
+4. Observe stage progression to `completed`
+5. Inspect artifacts in `data/ingestion/<job_id>/`
 
-```text
-http://127.0.0.1:8501
+Upload flow (any local file location, no manual path typing):
+
+1. Open Streamlit UI at `http://127.0.0.1:8501`
+2. In Ingestion Request, pick a PDF in the uploader
+3. Click `Upload selected PDF and ingest`
+4. Use returned `job_id` to check status
+
+Upload API example:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/ingest/upload" -F "file=@C:/Users/you/Documents/report.pdf" -F "metadata_json={\"ticker\":\"MSFT\"}"
 ```
 
-Open backend docs (optional cross-check):
+## Artifact Output
 
-```text
-http://127.0.0.1:8000/docs
-```
+For each completed job:
 
-UI sections to test:
+- `data/ingestion/<job_id>/status.json`
+- `data/ingestion/<job_id>/raw_pages.json`
+- `data/ingestion/<job_id>/normalized.md`
+- `data/ingestion/<job_id>/chunks.json`
+- `data/ingestion/<job_id>/metadata.json`
+- `data/ingestion/<job_id>/manifest.json`
 
-1. Backend Health
-   - click `Check backend health`
-   - expect reachable status payload
-2. Ingestion Request
-   - choose `source_type=pdf`
-   - enter local path in `source_value` (or use optional picker name helper)
-   - click `Submit ingest request`
-   - expect `job_id` and `queued`
-3. Ingestion Status
-   - verify `job_id` auto-fills from last ingest
-   - click `Check ingestion status`
-   - expect mocked status/progress/detail
-4. Chat
-   - enter a question
-   - click `Send chat request`
-   - expect mocked answer and citations table
-5. Debug Panel
-   - verify raw request/response event history appears for each action
+Chunk records include traceability metadata such as:
 
-## Sample User Flow
-
-1. Start backend and frontend
-2. Run health check from UI
-3. Submit ingest payload for local PDF path
-4. Copy/reuse returned `job_id` in status section
-5. Ask a chat question
-6. Inspect debug panel for payload correctness
+- `document_id`
+- `source_id`
+- `filename`
+- `page_number`
+- `section`
+- `chunk_id`
+- `chunk_index`
+- `snippet`
 
 ## Manual Verification Checklist
 
-- backend reachable from frontend health section
-- ingest call returns mock `job_id`
-- status call returns mocked progress for provided `job_id`
-- chat call returns mocked `answer` and `citations`
-- debug panel shows raw event payloads
-- errors are shown clearly when backend is offline or payload is invalid
+- backend starts successfully
+- `POST /ingest` with valid PDF path returns `job_id`
+- status endpoint transitions through ingestion stages
+- completed status includes `artifacts` and `summary`
+- artifact files exist on disk under `data/ingestion/<job_id>/`
+- Stage 2 Streamlit ingestion/status UI still works without redesign
 
-## Likely Failure Points and Debugging Tips
+## Common Parsing/Chunking/Debug Issues
 
-- Backend offline: health and other calls fail; start backend first
-- Wrong host/port in `.env`: confirm `BACKEND_HOST` and `BACKEND_PORT`
-- 422 from ingest/chat: check required fields in debug panel payload
-- Empty `source_value` for ingest: backend validation rejects request
-- Windows command/port conflicts: free port or change launch port values
+- Invalid path: returns `400` with clear message
+- Non-PDF source: rejected by validation
+- Empty text extracted from scanned PDF: check `raw_pages.json` and parser output
+- Parser errors: check backend logs and `status.json` error field
+- Long documents: status may stay in middle stages while processing
 
-## Stage 3 Preview
+## Stage 4 Preview
 
-1. Add thin ingestion adapters and stronger payload validation rules
-2. Add retrieval/storage interfaces for future local vector integration
-3. Add LLM adapter boundary for future local inference integration
-4. Expand frontend/backend contract tests around failure scenarios
+1. Add local vector storage boundary (still no production infra)
+2. Add embedding adapter interfaces and document indexing flow
+3. Add retrieval API scaffolding using stored chunks
+4. Keep frontend contract stable while enabling first real retrieval path

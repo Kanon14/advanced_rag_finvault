@@ -17,6 +17,17 @@ class IngestResponse(BaseModel):
 
 class IngestStatusResponse(BaseModel):
     job_id: str
-    status: Literal["queued", "processing", "completed", "failed"]
+    status: Literal[
+        "queued",
+        "validating",
+        "parsing",
+        "normalizing",
+        "chunking",
+        "completed",
+        "failed",
+    ]
     progress: int = Field(ge=0, le=100)
     detail: str
+    artifacts: dict[str, str] | None = None
+    summary: dict[str, Any] | None = None
+    error: str | None = None

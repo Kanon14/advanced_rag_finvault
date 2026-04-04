@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -65,6 +66,49 @@ class ApiClient:
             "metadata": metadata,
         }
         return self._request("POST", "/ingest", payload=payload)
+
+    def post_ingest_upload(
+        self, filename: str, file_bytes: bytes, metadata: dict[str, Any]
+    ) -> dict[str, Any]:
+        url = f"{self.base_url}/ingest/upload"
+        try:
+            response = httpx.post(
+                url,
+                data={"metadata_json": json.dumps(metadata)},
+                files={"file": (filename, file_bytes, "application/pdf")},
+                timeout=self.timeout_seconds,
+            )
+            try:
+                body: Any = response.json()
+            except ValueError:
+                body = {"raw_text": response.text}
+
+            if response.status_code >= 400:
+                return {
+                    "ok": False,
+                    "url": url,
+                    "status_code": response.status_code,
+                    "error": "HTTP error from backend",
+                    "data": body,
+                    "request_payload": {"filename": filename, "metadata": metadata},
+                }
+
+            return {
+                "ok": True,
+                "url": url,
+                "status_code": response.status_code,
+                "data": body,
+                "request_payload": {"filename": filename, "metadata": metadata},
+            }
+        except Exception as exc:
+            return {
+                "ok": False,
+                "url": url,
+                "status_code": None,
+                "error": str(exc),
+                "data": None,
+                "request_payload": {"filename": filename, "metadata": metadata},
+            }
 
     def get_ingest_status(self, job_id: str) -> dict[str, Any]:
         return self._request("GET", f"/ingest/{job_id}/status")

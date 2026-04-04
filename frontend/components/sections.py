@@ -50,12 +50,12 @@ def render_health_section(client: ApiClient, backend_url: str) -> None:
 
 def render_ingest_section(client: ApiClient) -> None:
     st.subheader("Ingestion Request")
-    st.caption("Stage 2 sends mocked payload only. No real file upload processing yet.")
+    st.caption("Stage 3 supports both absolute path ingestion and true file upload ingestion.")
 
     uploaded = st.file_uploader("Optional PDF picker (UI helper only)", type=["pdf"])
 
     source_type = st.selectbox("source_type", ["pdf", "text", "url"], index=0)
-    default_value = uploaded.name if uploaded is not None else ""
+    default_value = f"data/{uploaded.name}" if uploaded is not None else ""
     source_value = st.text_input(
         "source_value", value=default_value, placeholder="C:/path/to/file.pdf"
     )
@@ -68,6 +68,28 @@ def render_ingest_section(client: ApiClient) -> None:
         )
         st.session_state.last_ingest = result
         _record_debug("POST /ingest", result)
+        if result["ok"]:
+            st.session_state.last_job_id = result["data"].get("job_id", "")
+
+    upload_clicked = st.button("Upload selected PDF and ingest", use_container_width=True)
+    if upload_clicked:
+        metadata = {"ticker": ticker} if ticker else {}
+        if uploaded is None:
+            result = {
+                "ok": False,
+                "status_code": None,
+                "error": "No file selected for upload.",
+                "data": None,
+                "request_payload": {"metadata": metadata},
+            }
+        else:
+            result = client.post_ingest_upload(
+                filename=uploaded.name,
+                file_bytes=uploaded.getvalue(),
+                metadata=metadata,
+            )
+        st.session_state.last_ingest = result
+        _record_debug("POST /ingest/upload", result)
         if result["ok"]:
             st.session_state.last_job_id = result["data"].get("job_id", "")
 
