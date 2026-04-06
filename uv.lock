@@ -254,7 +254,6 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pypdf", specifier = ">=5.1.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
-    { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "python-multipart", specifier = ">=0.0.22" },
     { name = "qdrant-client", specifier = ">=1.11.0" },
     { name = "streamlit", specifier = ">=1.39.0" },

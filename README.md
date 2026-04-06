@@ -1,6 +1,6 @@
-# FinVault (Stage 0-3 Complete)
+# FinVault (Stage 0-4 Complete)
 
-FinVault is a local-first, staged Python project for experimenting with document ingestion and retrieval workflows over financial documents.
+FinVault is a local-first, staged Python project for experimenting with ingestion and retrieval workflows over financial documents.
 
 Current implementation status:
 
@@ -8,102 +8,69 @@ Current implementation status:
 - Stage 1: mocked FastAPI backend contract
 - Stage 2: Streamlit frontend connected to backend
 - Stage 3: real local ingestion pipeline with debug artifacts
+- Stage 4: local vector indexing and retrieval with Qdrant
 
-## Stage 3 Completion Notes (2026-04-04)
+## Stage 4 Scope
+
+Stage 4 adds vector indexing and retrieval on top of Stage 3 artifacts.
+
+## Stage 4 Completion Notes (2026-04-06)
 
 Validated in local testing:
 
-- Streamlit health check works against local FastAPI backend
-- path-based ingestion works with valid PDF paths
-- upload-based ingestion works from any local file location via `Upload selected PDF and ingest`
-- status polling reflects realistic stage transitions through completion
-- chat flow remains functional with existing mocked chat contract
-- ingestion artifacts are generated under `data/ingestion/<job_id>/`
+- Stage 3 ingestion -> `POST /index/{job_id}` flow works end-to-end
+- local Qdrant storage is created under `data/qdrant/`
+- indexing summary is generated at `data/indexing/<job_id>/index_summary.json`
+- `POST /retrieve` returns matched chunks with scores
+- retrieval results include traceable metadata for citation inspection
 
-## Stage 3 Scope
+Implemented in Stage 4:
 
-Stage 3 replaces mocked ingestion with a real local pipeline for PDF input.
-
-Implemented in Stage 3:
-
-- real ingestion jobs created by `POST /ingest`
-- realistic stage progress via `GET /ingest/{job_id}/status`
-- local file validation and clear error messages
-- parser adapter boundary (Docling-ready) with `pypdf` runtime parser
-- deterministic normalization and chunking
-- artifact output under `data/ingestion/<job_id>/`
-- traceable chunk metadata for future citations
+- local-first Qdrant storage boundary
+- embedding adapter boundary with default deterministic hash embedder
+- indexing endpoint to read `data/ingestion/<job_id>/chunks.json` and upsert vectors
+- retrieval endpoint for query-time vector search (no answer generation)
+- structured logging for collection setup, indexing, and retrieval
+- indexing debug summaries under `data/indexing/<job_id>/index_summary.json`
 
 Still intentionally not implemented:
 
-- Qdrant/vector storage integration
-- embeddings and retrieval pipeline
+- answer generation from LLM
 - Ollama integration
 - LangGraph orchestration
 - SSE streaming
-- reranking/hybrid retrieval
-- background queue infrastructure
+- reranking / HyDE / hybrid retrieval
 
-## Backend Ingestion Contract
+## New API Endpoints
 
-Existing endpoints remain stable:
+- `POST /index/{job_id}`: index one completed ingestion job into Qdrant
+- `POST /retrieve`: vector search test endpoint returning matched chunks/scores/metadata
 
-- `POST /ingest`
-- `POST /ingest/upload`
-- `GET /ingest/{job_id}/status`
+Existing ingestion and chat endpoints remain available.
 
-Status values are now more realistic:
+## Qdrant Local Mode
 
-- `queued`
-- `validating`
-- `parsing`
-- `normalizing`
-- `chunking`
-- `completed`
-- `failed`
+Default mode is local and file-backed:
 
-`POST /ingest` request format (unchanged):
+- `QDRANT_MODE=local`
+- `QDRANT_PATH=data/qdrant`
 
-```json
-{
-  "source_type": "pdf",
-  "source_value": "C:/Users/you/path/to/file.pdf",
-  "metadata": {
-    "ticker": "MSFT"
-  }
-}
-```
+This avoids external infra for local development.
 
-`GET /ingest/{job_id}/status` now also returns optional debug fields:
+Switch to hosted later by setting:
 
-- `artifacts`
-- `summary`
-- `error`
+- `QDRANT_MODE=remote`
+- `QDRANT_URL=...`
+- `QDRANT_API_KEY=...`
 
-These are additive fields and remain compatible with the Stage 2 frontend.
+## Embedding Configuration
 
-## Project Layout (Stage 3 highlights)
+Default embedder:
 
-```text
-backend/
-  api/routes/ingest.py
-  ingestion/
-    validator.py
-    parsers/
-      base.py
-      pypdf_parser.py
-      docling_parser.py
-    normalizer.py
-    chunker.py
-    artifacts.py
-    job_store.py
-  services/
-    ingestion_service.py
-data/
-  ingestion/
-frontend/
-  app.py
-```
+- `EMBEDDING_PROVIDER=hash`
+- `EMBEDDING_DIMENSION=256`
+
+Embedding dimension is configured in `.env` and must match collection vector size.
 
 ## Run with uv
 
@@ -126,69 +93,72 @@ Run frontend (Terminal 2):
 uv run streamlit run frontend/app.py --server.address 127.0.0.1 --server.port 8501
 ```
 
-## Real Ingestion Flow (Stage 3)
+## How to Index Stage 3 Artifacts
 
-1. Submit ingestion request from Streamlit or `/docs`
-2. Receive `job_id`
-3. Poll `GET /ingest/{job_id}/status`
-4. Observe stage progression to `completed`
-5. Inspect artifacts in `data/ingestion/<job_id>/`
-
-Upload flow (any local file location, no manual path typing):
-
-1. Open Streamlit UI at `http://127.0.0.1:8501`
-2. In Ingestion Request, pick a PDF in the uploader
-3. Click `Upload selected PDF and ingest`
-4. Use returned `job_id` to check status
-
-Upload API example:
+1. Run ingestion (Stage 3) and get `job_id`
+2. Index it:
 
 ```powershell
-curl -X POST "http://127.0.0.1:8000/ingest/upload" -F "file=@C:/Users/you/Documents/report.pdf" -F "metadata_json={\"ticker\":\"MSFT\"}"
+curl -X POST "http://127.0.0.1:8000/index/<job_id>" -H "Content-Type: application/json" -d "{}"
 ```
 
-## Artifact Output
+Optional custom collection:
 
-For each completed job:
+```powershell
+curl -X POST "http://127.0.0.1:8000/index/<job_id>" -H "Content-Type: application/json" -d "{\"collection_name\":\"finvault_chunks\"}"
+```
 
-- `data/ingestion/<job_id>/status.json`
-- `data/ingestion/<job_id>/raw_pages.json`
-- `data/ingestion/<job_id>/normalized.md`
-- `data/ingestion/<job_id>/chunks.json`
-- `data/ingestion/<job_id>/metadata.json`
-- `data/ingestion/<job_id>/manifest.json`
+Index response includes:
 
-Chunk records include traceability metadata such as:
-
+- `job_id`
 - `document_id`
-- `source_id`
-- `filename`
-- `page_number`
-- `section`
+- `collection_name`
+- `chunk_count`
+- `indexed_count`
+- `embedding_provider`
+- `embedding_dimension`
+- `status`
+- `errors`
+
+## How to Test Retrieval
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/retrieve" -H "Content-Type: application/json" -d "{\"query\":\"key risk factors and summary\",\"top_k\":5}"
+```
+
+Response returns:
+
+- `matches[]` with `score`
 - `chunk_id`
-- `chunk_index`
-- `snippet`
+- `text`
+- traceable metadata (`document_id`, `source_id`, `filename`, `page_number`, `chunk_index`, `snippet`, `ingestion_job_id`)
+
+## Debug Artifacts
+
+- ingestion artifacts: `data/ingestion/<job_id>/...`
+- indexing summary: `data/indexing/<job_id>/index_summary.json`
+- local qdrant files: `data/qdrant/`
 
 ## Manual Verification Checklist
 
-- backend starts successfully
-- `POST /ingest` with valid PDF path returns `job_id`
-- status endpoint transitions through ingestion stages
-- completed status includes `artifacts` and `summary`
-- artifact files exist on disk under `data/ingestion/<job_id>/`
-- Stage 2 Streamlit ingestion/status UI still works without redesign
+- Stage 3 ingestion still succeeds and writes chunk artifacts
+- `POST /index/{job_id}` returns summary with non-zero `indexed_count`
+- `data/qdrant/` exists in local mode
+- `data/indexing/<job_id>/index_summary.json` is created
+- `POST /retrieve` returns matches with score + traceable metadata
+- existing `/chat` endpoint still behaves as before (mocked)
 
-## Common Parsing/Chunking/Debug Issues
+## Common Stage 4 Issues
 
-- Invalid path: returns `400` with clear message
-- Non-PDF source: rejected by validation
-- Empty text extracted from scanned PDF: check `raw_pages.json` and parser output
-- Parser errors: check backend logs and `status.json` error field
-- Long documents: status may stay in middle stages while processing
+- `Missing chunks artifact`: run Stage 3 ingestion first
+- empty retrieval matches: ensure indexing ran on correct collection
+- vector size mismatch: check `EMBEDDING_DIMENSION`
+- local qdrant lock/path issues: stop conflicting process, verify `QDRANT_PATH`
+- low retrieval quality: expected with deterministic hash embedding (upgrade in later stage)
 
-## Stage 4 Preview
+## Stage 5 Preview
 
-1. Add local vector storage boundary (still no production infra)
-2. Add embedding adapter interfaces and document indexing flow
-3. Add retrieval API scaffolding using stored chunks
-4. Keep frontend contract stable while enabling first real retrieval path
+1. Add better embedding providers (adapter remains replaceable)
+2. Tie retrieval results into chat context assembly
+3. Prepare generation boundary (still modular)
+4. Expand retrieval evaluation/debug tooling
