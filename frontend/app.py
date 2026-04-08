@@ -26,7 +26,11 @@ except ModuleNotFoundError:
 
 def main() -> None:
     settings = get_settings()
-    client = ApiClient(base_url=settings.backend_base_url)
+    client = ApiClient(
+        base_url=settings.backend_base_url,
+        timeout_seconds=settings.frontend_api_timeout_seconds,
+        chat_timeout_seconds=settings.frontend_chat_timeout_seconds,
+    )
 
     st.set_page_config(page_title="FinVault", page_icon="FV", layout="wide")
     st.title("FinVault - Stage 2 Frontend Skeleton")

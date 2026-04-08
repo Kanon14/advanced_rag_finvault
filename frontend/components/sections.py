@@ -127,9 +127,15 @@ def render_chat_section(client: ApiClient) -> None:
     question = st.text_area("question", value="Summarize key points from the document.")
     session_id = st.text_input("session_id", value="stage2-ui")
     top_k = st.slider("top_k", min_value=1, max_value=10, value=3)
+    collection_name = st.text_input("collection_name (optional)", value="")
 
     if st.button("Send chat request", use_container_width=True):
-        result = client.post_chat(question=question, session_id=session_id, top_k=top_k)
+        result = client.post_chat(
+            question=question,
+            session_id=session_id,
+            top_k=top_k,
+            collection_name=collection_name or None,
+        )
         st.session_state.last_chat = result
         _record_debug("POST /chat", result)
 

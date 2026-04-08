@@ -13,6 +13,8 @@ class FrontendSettings:
     backend_port: int
     frontend_host: str
     frontend_port: int
+    frontend_api_timeout_seconds: float
+    frontend_chat_timeout_seconds: float
 
     @property
     def backend_base_url(self) -> str:
@@ -35,4 +37,6 @@ def get_settings() -> FrontendSettings:
         backend_port=int(os.getenv("BACKEND_PORT", "8000")),
         frontend_host=os.getenv("FRONTEND_HOST", "127.0.0.1"),
         frontend_port=int(os.getenv("FRONTEND_PORT", "8501")),
+        frontend_api_timeout_seconds=float(os.getenv("FRONTEND_API_TIMEOUT_SECONDS", "30")),
+        frontend_chat_timeout_seconds=float(os.getenv("FRONTEND_CHAT_TIMEOUT_SECONDS", "120")),
     )

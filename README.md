@@ -1,76 +1,116 @@
-# FinVault (Stage 0-4 Complete)
+# FinVault (Stage 0-5 Complete)
 
-FinVault is a local-first, staged Python project for experimenting with ingestion and retrieval workflows over financial documents.
+FinVault is a local-first, staged Python project for experimenting with ingestion, indexing, retrieval, and baseline RAG generation over financial documents.
 
 Current implementation status:
 
 - Stage 0: uv-native setup and smoke scaffolding
-- Stage 1: mocked FastAPI backend contract
+- Stage 1: backend API contract skeleton
 - Stage 2: Streamlit frontend connected to backend
-- Stage 3: real local ingestion pipeline with debug artifacts
+- Stage 3: real local ingestion pipeline with artifacts
 - Stage 4: local vector indexing and retrieval with Qdrant
+- Stage 5: baseline RAG answer generation with Qdrant + Ollama
 
-## Stage 4 Scope
+## Stage 5 Scope
 
-Stage 4 adds vector indexing and retrieval on top of Stage 3 artifacts.
+Stage 5 replaces the mocked chat behavior with a real baseline RAG flow:
 
-## Stage 4 Completion Notes (2026-04-06)
+## Stage 5 Completion Notes (2026-04-08)
 
 Validated in local testing:
 
-- Stage 3 ingestion -> `POST /index/{job_id}` flow works end-to-end
-- local Qdrant storage is created under `data/qdrant/`
-- indexing summary is generated at `data/indexing/<job_id>/index_summary.json`
-- `POST /retrieve` returns matched chunks with scores
-- retrieval results include traceable metadata for citation inspection
+- end-to-end baseline RAG flow works: ingestion -> indexing -> retrieval -> chat generation
+- `POST /chat` now performs real retrieval + Ollama generation (no mocked answer)
+- chat supports optional `collection_name` for per-request collection targeting
+- citations include traceable metadata (`chunk_id`, `filename`, `page_number`, `chunk_index`, `snippet`, `document_id`, `ingestion_job_id`)
+- frontend chat timeout issue resolved with:
+  - `FRONTEND_API_TIMEOUT_SECONDS=30`
+  - `FRONTEND_CHAT_TIMEOUT_SECONDS=120`
+- chat debug artifacts are generated under `data/chat/<request_id>/`
 
-Implemented in Stage 4:
+1. embed query using Stage 4 embedding boundary
+2. retrieve top-k chunks from Qdrant
+3. build deterministic context + prompt
+4. call Ollama for generation
+5. return answer + traceable citations
 
-- local-first Qdrant storage boundary
-- embedding adapter boundary with default deterministic hash embedder
-- indexing endpoint to read `data/ingestion/<job_id>/chunks.json` and upsert vectors
-- retrieval endpoint for query-time vector search (no answer generation)
-- structured logging for collection setup, indexing, and retrieval
-- indexing debug summaries under `data/indexing/<job_id>/index_summary.json`
+Implemented in Stage 5:
+
+- real `POST /chat` retrieval + generation pipeline
+- Ollama generation adapter boundary (`backend/llm/ollama_client.py`)
+- context/prompt builder service (`backend/services/context_builder.py`)
+- chat debug artifacts under `data/chat/<request_id>/`
+- additive chat response fields: `request_id`, `model`, `retrieval_count`
 
 Still intentionally not implemented:
 
-- answer generation from LLM
-- Ollama integration
 - LangGraph orchestration
 - SSE streaming
-- reranking / HyDE / hybrid retrieval
+- reranking
+- HyDE
+- hybrid retrieval
 
-## New API Endpoints
+## Chat API Contract (Stage 5)
 
-- `POST /index/{job_id}`: index one completed ingestion job into Qdrant
-- `POST /retrieve`: vector search test endpoint returning matched chunks/scores/metadata
+Request remains stable:
 
-Existing ingestion and chat endpoints remain available.
+```json
+{
+  "question": "Summarize major risk factors",
+  "session_id": "demo-session",
+  "top_k": 3,
+  "collection_name": "finvault_chunks"
+}
+```
 
-## Qdrant Local Mode
+`collection_name` is optional. If omitted, backend uses `QDRANT_COLLECTION` from environment.
 
-Default mode is local and file-backed:
+Response now returns real generation output and additive debug fields:
 
+```json
+{
+  "answer": "...",
+  "citations": [
+    {
+      "source_id": "...",
+      "title": "...",
+      "chunk_id": "...",
+      "score": 0.82,
+      "filename": "...",
+      "page_number": 2,
+      "chunk_index": 5,
+      "snippet": "...",
+      "document_id": "...",
+      "ingestion_job_id": "..."
+    }
+  ],
+  "mocked": false,
+  "request_id": "chat_xxxxx",
+  "model": "llama3.2",
+  "retrieval_count": 3
+}
+```
+
+## Environment Configuration
+
+Copy `.env.example` to `.env`:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Key Stage 4/5 fields:
+
+- `FRONTEND_API_TIMEOUT_SECONDS=30`
+- `FRONTEND_CHAT_TIMEOUT_SECONDS=120`
 - `QDRANT_MODE=local`
 - `QDRANT_PATH=data/qdrant`
-
-This avoids external infra for local development.
-
-Switch to hosted later by setting:
-
-- `QDRANT_MODE=remote`
-- `QDRANT_URL=...`
-- `QDRANT_API_KEY=...`
-
-## Embedding Configuration
-
-Default embedder:
-
+- `QDRANT_COLLECTION=finvault_chunks`
 - `EMBEDDING_PROVIDER=hash`
 - `EMBEDDING_DIMENSION=256`
-
-Embedding dimension is configured in `.env` and must match collection vector size.
+- `OLLAMA_BASE_URL=http://127.0.0.1:11434`
+- `OLLAMA_MODEL=llama3.2`
+- `OLLAMA_TIMEOUT_SECONDS=90`
 
 ## Run with uv
 
@@ -81,84 +121,78 @@ uv venv
 uv sync --dev
 ```
 
-Run backend (Terminal 1):
+Run backend:
 
 ```powershell
 uv run uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Run frontend (Terminal 2):
+Run frontend:
 
 ```powershell
 uv run streamlit run frontend/app.py --server.address 127.0.0.1 --server.port 8501
 ```
 
-## How to Index Stage 3 Artifacts
-
-1. Run ingestion (Stage 3) and get `job_id`
-2. Index it:
+Start Ollama and ensure model exists:
 
 ```powershell
+ollama serve
+ollama pull llama3.2
+```
+
+## Full Baseline RAG Flow Test
+
+1. Ingest a PDF (path or upload endpoint)
+2. Wait for ingestion status `completed`
+3. Index artifacts via `POST /index/{job_id}`
+4. Query retrieval via `POST /retrieve` (optional check)
+5. Call `POST /chat` for generated answer
+
+Example calls:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/ingest/upload" -F "file=@C:/Users/you/Documents/report.pdf" -F "metadata_json={\"ticker\":\"MSFT\"}"
 curl -X POST "http://127.0.0.1:8000/index/<job_id>" -H "Content-Type: application/json" -d "{}"
+curl -X POST "http://127.0.0.1:8000/chat" -H "Content-Type: application/json" -d "{\"question\":\"Summarize key risks\",\"top_k\":3,\"collection_name\":\"finvault_chunks\"}"
 ```
 
-Optional custom collection:
+## Debug Artifacts and Logs
 
-```powershell
-curl -X POST "http://127.0.0.1:8000/index/<job_id>" -H "Content-Type: application/json" -d "{\"collection_name\":\"finvault_chunks\"}"
-```
+Ingestion artifacts:
 
-Index response includes:
+- `data/ingestion/<job_id>/...`
 
-- `job_id`
-- `document_id`
-- `collection_name`
-- `chunk_count`
-- `indexed_count`
-- `embedding_provider`
-- `embedding_dimension`
-- `status`
-- `errors`
+Indexing debug output:
 
-## How to Test Retrieval
+- `data/indexing/<job_id>/index_summary.json`
 
-```powershell
-curl -X POST "http://127.0.0.1:8000/retrieve" -H "Content-Type: application/json" -d "{\"query\":\"key risk factors and summary\",\"top_k\":5}"
-```
+Chat debug output:
 
-Response returns:
-
-- `matches[]` with `score`
-- `chunk_id`
-- `text`
-- traceable metadata (`document_id`, `source_id`, `filename`, `page_number`, `chunk_index`, `snippet`, `ingestion_job_id`)
-
-## Debug Artifacts
-
-- ingestion artifacts: `data/ingestion/<job_id>/...`
-- indexing summary: `data/indexing/<job_id>/index_summary.json`
-- local qdrant files: `data/qdrant/`
+- `data/chat/<request_id>/question.txt`
+- `data/chat/<request_id>/retrieval.json`
+- `data/chat/<request_id>/prompt.txt`
+- `data/chat/<request_id>/llm_response.json` (if generation succeeds)
 
 ## Manual Verification Checklist
 
-- Stage 3 ingestion still succeeds and writes chunk artifacts
-- `POST /index/{job_id}` returns summary with non-zero `indexed_count`
-- `data/qdrant/` exists in local mode
-- `data/indexing/<job_id>/index_summary.json` is created
-- `POST /retrieve` returns matches with score + traceable metadata
-- existing `/chat` endpoint still behaves as before (mocked)
+- ingestion still completes and writes artifacts
+- indexing returns non-zero indexed chunks
+- retrieval returns matches and metadata
+- `/chat` returns non-mocked answer and citations when Ollama is available
+- fallback response is returned when retrieval context is unavailable
+- `/chat` returns actionable 503 when Ollama is unavailable but retrieval context exists
 
-## Common Stage 4 Issues
+## Common Stage 5 Issues
 
-- `Missing chunks artifact`: run Stage 3 ingestion first
-- empty retrieval matches: ensure indexing ran on correct collection
-- vector size mismatch: check `EMBEDDING_DIMENSION`
-- local qdrant lock/path issues: stop conflicting process, verify `QDRANT_PATH`
-- low retrieval quality: expected with deterministic hash embedding (upgrade in later stage)
+- Ollama not running: start with `ollama serve`
+- model missing: run `ollama pull <model>`
+- no retrieval matches: verify indexing completed in same collection
+- collection not found: run indexing before chat/retrieve
+- weak answer quality: expected with baseline hash embeddings and simple prompting
 
-## Stage 5 Preview
+## Stage 6 Preview
 
-1. Add better embedding providers (adapter remains replaceable)
-2. Tie retrieval results into chat context assembly
-3. Prepare generation boundary (still modular)
-4. Expand retrieval evaluation/debug tooling
+1. improve embedding quality with replaceable provider upgrades
+2. add retrieval quality controls and filtering heuristics
+3. prepare orchestration boundaries for future graph-based flows
+4. improve prompt/citation diagnostics for iterative tuning
