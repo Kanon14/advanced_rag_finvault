@@ -53,9 +53,15 @@ def index_job_artifacts(job_id: str, collection_name: str | None = None) -> Inde
         raise IndexingError("No chunks to index.")
 
     client = get_qdrant_client()
-    ensure_collection(client=client, collection_name=collection, vector_size=embedding_dim)
+    try:
+        ensure_collection(client=client, collection_name=collection, vector_size=embedding_dim)
+    except Exception as exc:
+        raise IndexingError(str(exc)) from exc
 
-    embedder = build_embedder(dimension=embedding_dim)
+    try:
+        embedder = build_embedder(dimension=embedding_dim)
+    except Exception as exc:
+        raise IndexingError(f"Embedding provider initialization failed: {exc}") from exc
     logger.info(
         "Indexing started job_id=%s collection=%s chunks=%s embedder=%s dim=%s",
         job_id,

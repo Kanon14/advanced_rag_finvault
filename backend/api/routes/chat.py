@@ -20,9 +20,10 @@ logger = get_logger(__name__)
 )
 def chat(payload: ChatRequest) -> ChatResponse:
     logger.info(
-        "Received chat request session_id=%s collection_name=%s",
+        "Received chat request session_id=%s collection_name=%s min_score=%s",
         payload.session_id,
         payload.collection_name,
+        payload.min_score,
     )
     try:
         response = generate_chat_response(payload)

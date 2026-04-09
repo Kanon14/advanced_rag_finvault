@@ -4,33 +4,38 @@ from backend.schemas.chat import Citation
 from backend.schemas.retrieve import RetrieveMatch
 
 
-def build_context(matches: list[RetrieveMatch]) -> str:
-    parts: list[str] = []
-    for idx, match in enumerate(matches, start=1):
+def build_context_blocks(matches: list[RetrieveMatch]) -> list[str]:
+    blocks: list[str] = []
+    for match in matches:
         meta = match.metadata or {}
-        parts.append(
-            "\n".join(
-                [
-                    f"[Source {idx}]",
-                    f"chunk_id: {match.chunk_id}",
-                    f"score: {match.score:.4f}",
-                    f"document_id: {meta.get('document_id')}",
-                    f"filename: {meta.get('filename')}",
-                    f"page_number: {meta.get('page_number')}",
-                    f"chunk_index: {meta.get('chunk_index')}",
-                    f"snippet: {meta.get('snippet')}",
-                    f"text: {match.text}",
-                ]
-            )
+        block = "\n".join(
+            [
+                f"[Rank {match.retrieval_rank}]",
+                f"chunk_id: {match.chunk_id}",
+                f"score: {match.score:.4f}",
+                f"document_id: {meta.get('document_id')}",
+                f"filename: {meta.get('filename')}",
+                f"page_number: {meta.get('page_number')}",
+                f"chunk_index: {meta.get('chunk_index')}",
+                f"snippet: {meta.get('snippet')}",
+                "text:",
+                match.text,
+            ]
         )
-    return "\n\n".join(parts)
+        blocks.append(block)
+    return blocks
+
+
+def build_context(matches: list[RetrieveMatch]) -> str:
+    return "\n\n---\n\n".join(build_context_blocks(matches))
 
 
 def build_prompt(question: str, context: str) -> str:
     return (
         "You are a precise financial document assistant.\n"
-        "Answer using only the provided context.\n"
-        "If context is insufficient, say so clearly.\n\n"
+        "Use only the provided context.\n"
+        "If the answer is not in context, explicitly say that.\n"
+        "Keep answer concise and factual.\n\n"
         f"Context:\n{context}\n\n"
         f"Question:\n{question}\n\n"
         "Answer:"
@@ -53,6 +58,9 @@ def build_citations(matches: list[RetrieveMatch]) -> list[Citation]:
                 snippet=meta.get("snippet"),
                 document_id=meta.get("document_id"),
                 ingestion_job_id=meta.get("ingestion_job_id"),
+                retrieval_rank=match.retrieval_rank,
+                included_in_prompt=True,
+                filtered_out_reason=None,
             )
         )
     return citations

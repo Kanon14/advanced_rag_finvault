@@ -14,7 +14,7 @@ def _as_bool(value: str, default: bool = False) -> bool:
 @dataclass(frozen=True)
 class Settings:
     app_name: str = "FinVault Backend"
-    app_version: str = "0.1.0-stage5"
+    app_version: str = "0.1.0-stage6"
     app_env: str = "local"
     app_debug: bool = True
     backend_host: str = "127.0.0.1"
@@ -26,6 +26,11 @@ class Settings:
     qdrant_collection: str = "finvault_chunks"
     embedding_provider: str = "hash"
     embedding_dimension: int = 256
+    embedding_model: str = "nomic-embed-text"
+    retrieval_min_score: float = -1.0
+    retrieval_max_context_chars: int = 6000
+    retrieval_deduplicate: bool = True
+    retrieval_unique_pages: bool = False
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.2"
     ollama_timeout_seconds: int = 90
@@ -46,6 +51,13 @@ def get_settings() -> Settings:
         qdrant_collection=os.getenv("QDRANT_COLLECTION", "finvault_chunks"),
         embedding_provider=os.getenv("EMBEDDING_PROVIDER", "hash"),
         embedding_dimension=int(os.getenv("EMBEDDING_DIMENSION", "256")),
+        embedding_model=os.getenv("EMBEDDING_MODEL", "nomic-embed-text"),
+        retrieval_min_score=float(os.getenv("RETRIEVAL_MIN_SCORE", "-1.0")),
+        retrieval_max_context_chars=int(os.getenv("RETRIEVAL_MAX_CONTEXT_CHARS", "6000")),
+        retrieval_deduplicate=_as_bool(os.getenv("RETRIEVAL_DEDUPLICATE", "true"), default=True),
+        retrieval_unique_pages=_as_bool(
+            os.getenv("RETRIEVAL_UNIQUE_PAGES", "false"), default=False
+        ),
         ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
         ollama_model=os.getenv("OLLAMA_MODEL", "llama3.2"),
         ollama_timeout_seconds=int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "90")),

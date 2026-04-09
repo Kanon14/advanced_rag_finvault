@@ -17,12 +17,21 @@ logger = get_logger(__name__)
     responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
 )
 def retrieve(payload: RetrieveRequest) -> RetrieveResponse:
-    logger.info("Received retrieve request top_k=%s", payload.top_k)
+    logger.info(
+        "Received retrieve request top_k=%s min_score=%s max_context_chars=%s",
+        payload.top_k,
+        payload.min_score,
+        payload.max_context_chars,
+    )
     try:
         return retrieve_chunks(
             query=payload.query,
             top_k=payload.top_k,
             collection_name=payload.collection_name,
+            min_score=payload.min_score,
+            max_context_chars=payload.max_context_chars,
+            deduplicate=payload.deduplicate,
+            unique_pages=payload.unique_pages,
         )
     except Exception as exc:
         logger.warning("Retrieve failed: %s", exc)
