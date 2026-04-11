@@ -33,8 +33,8 @@ def main() -> None:
     )
 
     st.set_page_config(page_title="FinVault", page_icon="FV", layout="wide")
-    st.title("FinVault - Stage 2 Frontend Skeleton")
-    st.caption("Streamlit UI connected to mocked Stage 1 FastAPI backend.")
+    st.title("FinVault - Stage 6 Frontend")
+    st.caption("Streamlit UI connected to local ingestion, retrieval, and RAG backend.")
 
     init_state()
 

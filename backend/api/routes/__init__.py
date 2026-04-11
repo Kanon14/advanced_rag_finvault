@@ -2,8 +2,8 @@ from fastapi import APIRouter
 
 from backend.api.routes.chat import router as chat_router
 from backend.api.routes.health import router as health_router
-from backend.api.routes.ingest import router as ingest_router
 from backend.api.routes.indexing import router as indexing_router
+from backend.api.routes.ingest import router as ingest_router
 from backend.api.routes.retrieve import router as retrieve_router
 
 api_router = APIRouter()

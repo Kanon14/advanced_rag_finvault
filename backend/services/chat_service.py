@@ -76,7 +76,8 @@ def generate_chat_response(payload: ChatRequest) -> ChatResponse:
             diagnostics_payload={"reason": "retrieval_error"},
         )
         raise ChatServiceError(
-            f"Retrieval failed before generation: {exc}. Check collection/indexing and embedding configuration."
+            "Retrieval failed before generation: "
+            f"{exc}. Check collection/indexing and embedding configuration."
         ) from exc
 
     matches = retrieval.matches

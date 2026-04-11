@@ -16,6 +16,23 @@ Current implementation status:
 
 Stage 6 improves retrieval quality and debuggability without adding orchestration complexity.
 
+## Stage 6 Completion Notes (2026-04-10)
+
+Validated in local testing:
+
+- ingestion -> indexing -> retrieval -> chat flow works end-to-end
+- retrieval diagnostics are generated with raw/included/excluded counts and reasons
+- chat diagnostics are generated and persisted in `data/chat/<request_id>/diagnostics.json`
+- collection-specific testing works via additive `collection_name` request field
+- frontend chat timeout behavior is stabilized for local Ollama runs
+
+Repository cleanup completed (conservative):
+
+- removed unused mock service files from `backend/services/`
+- removed unused root-level placeholder package stubs (`ingestion/`, `retrieval/`, `llm/`, `db/`, `graph/`, `schemas/`)
+- updated frontend header text to match current Stage 6 runtime
+- lint and tests pass after cleanup
+
 Implemented in Stage 6:
 
 - embedding provider upgrades behind existing adapter boundary

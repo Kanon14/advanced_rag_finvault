@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime, timezone
-from pathlib import Path
 from threading import Lock
 from typing import Any
 
-from backend.ingestion.models import IngestionStatus, JobState
 from backend.ingestion.artifacts import ensure_job_dir, write_json
+from backend.ingestion.models import IngestionStatus, JobState
 
 
 class JobStore:

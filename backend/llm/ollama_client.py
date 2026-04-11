@@ -31,7 +31,8 @@ class OllamaClient:
             response = httpx.post(endpoint, json=payload, timeout=self.timeout_seconds)
         except Exception as exc:
             raise OllamaError(
-                f"Ollama is unreachable at {self.base_url}. Start Ollama and pull model '{self.model}'."
+                f"Ollama is unreachable at {self.base_url}. "
+                f"Start Ollama and pull model '{self.model}'."
             ) from exc
 
         if response.status_code >= 400:

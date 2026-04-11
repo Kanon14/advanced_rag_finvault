@@ -41,7 +41,8 @@ def validate_ingest_request(payload: IngestRequest) -> Path:
     source_path = _resolve_source_path(payload.source_value)
     if source_path is None:
         raise IngestionValidationError(
-            "Source file does not exist. Use an absolute path or a path relative to project root/data. "
+            "Source file does not exist. Use an absolute path or a path relative to "
+            "project root/data. "
             f"Received: {payload.source_value}"
         )
     if not source_path.is_file():
